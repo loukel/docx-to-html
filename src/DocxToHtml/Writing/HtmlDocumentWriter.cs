@@ -277,11 +277,12 @@ internal sealed class BodyWriter
         while (leadingHeaders < table.Rows.Count && table.Rows[leadingHeaders].IsHeader)
             leadingHeaders++;
 
+        var rowsRemainingInSpan = new int[table.ColumnWidthPercentages.Count];
         if (leadingHeaders > 0)
         {
             html.Append("<thead>\n");
             for (var index = 0; index < leadingHeaders; index++)
-                WriteRow(table.Rows[index]);
+                WriteRow(table.Rows[index], table.ColumnWidthPercentages, rowsRemainingInSpan);
             html.Append("</thead>\n");
         }
 
@@ -289,20 +290,50 @@ internal sealed class BodyWriter
         {
             html.Append("<tbody>\n");
             for (var index = leadingHeaders; index < table.Rows.Count; index++)
-                WriteRow(table.Rows[index]);
+                WriteRow(table.Rows[index], table.ColumnWidthPercentages, rowsRemainingInSpan);
             html.Append("</tbody>\n");
         }
 
         html.Append("</table>\n");
     }
 
-    private void WriteRow(TableRowModel row)
+    private void WriteRow(TableRowModel row, IReadOnlyList<int> columnWidths, int[] rowsRemainingInSpan)
     {
         html.Append("<tr>\n");
+        var columnIndex = 0;
         foreach (var cell in row.Cells)
         {
+            while (columnIndex < rowsRemainingInSpan.Length && rowsRemainingInSpan[columnIndex] > 0)
+                columnIndex++;
+
             var tag = row.IsHeader ? "th" : "td";
             var classes = new List<string>();
+            var columnSpan = Math.Max(cell.ColumnSpan, 1);
+            if (columnWidths.Count > 0)
+            {
+                var coveredPercent = 0;
+                var countedColumns = 0;
+                for (var offset = 0; offset < columnSpan && columnIndex + offset < columnWidths.Count; offset++)
+                {
+                    coveredPercent += columnWidths[columnIndex + offset];
+                    countedColumns++;
+                }
+
+                if (countedColumns > 0)
+                {
+                    classes.Add(registry.Register(
+                        "w-" + coveredPercent.ToString(CultureInfo.InvariantCulture),
+                        "width: " + coveredPercent.ToString(CultureInfo.InvariantCulture) + "%;"));
+                }
+            }
+
+            if (cell.RowSpan > 1)
+            {
+                for (var offset = 0; offset < columnSpan && columnIndex + offset < rowsRemainingInSpan.Length; offset++)
+                    rowsRemainingInSpan[columnIndex + offset] = cell.RowSpan;
+            }
+
+            columnIndex += columnSpan;
             if (!string.IsNullOrEmpty(cell.ShadingHex))
             {
                 var hex = cell.ShadingHex.ToLowerInvariant();
@@ -334,6 +365,13 @@ internal sealed class BodyWriter
                 WriteBlocks(cell.Blocks);
             html.Append("</").Append(tag).Append(">\n");
         }
+
+        for (var index = 0; index < rowsRemainingInSpan.Length; index++)
+        {
+            if (rowsRemainingInSpan[index] > 0)
+                rowsRemainingInSpan[index]--;
+        }
+
         html.Append("</tr>\n");
     }
 
@@ -343,7 +381,8 @@ internal sealed class BodyWriter
             "textbox",
             "border: 1px solid #cccccc;",
             "padding: 0.75em;",
-            "margin: 0.5em 0;")).Append("\">\n");
+            "margin: 0.5em 0;",
+            "page-break-inside: avoid;")).Append("\">\n");
         WriteBlocks(blocks);
         html.Append("</div>\n");
     }
@@ -398,9 +437,11 @@ internal sealed class BodyWriter
                 case PageBreakInline:
                     html.Append("<hr class=\"").Append(FeatureClass(
                         "page-break",
+                        "page-break-before: always;",
                         "border: 0;",
                         "border-top: 1px solid #cccccc;",
-                        "margin: 1.5em 0;")).Append("\">");
+                        "margin: 1.5em 0;",
+                        "height: 0;")).Append("\">");
                     break;
                 case TabInline:
                     html.Append("<span class=\"").Append(FeatureClass("tab", "display: inline-block;", "width: 2em;")).Append("\"></span>");

@@ -177,6 +177,30 @@ public class ConversionTests
     }
 
     [Fact]
+    public void StylesHoldUpInTinyMceAndWkhtmltopdf()
+    {
+        var builder = new WordDocumentBuilder("Page break");
+        builder.Add(new Paragraph(
+            new Run(new Text("Before")),
+            new Run(new Break { Type = BreakValues.Page }),
+            new Run(new Text("After"))));
+        var pageBreak = ConvertBytes(builder.Finish());
+        Assert.Contains("class=\"page-break\"", pageBreak.Html, StringComparison.Ordinal);
+        Assert.Contains("page-break-before: always;", pageBreak.Css, StringComparison.Ordinal);
+        Assert.Contains("page-break-after: avoid;", pageBreak.Css, StringComparison.Ordinal);
+        Assert.Contains("\"Liberation Sans\"", pageBreak.Css, StringComparison.Ordinal);
+        Assert.Contains(".mce-content-body", pageBreak.Css, StringComparison.Ordinal);
+        Assert.DoesNotContain("height: auto;", pageBreak.Css, StringComparison.Ordinal);
+
+        var table = new HtmlParser().ParseDocument(ConvertBytes(WordFixtureFactory.Build("simple-table")).Html);
+        Assert.Contains(table.QuerySelectorAll("td"), cell => cell.ClassList.Contains("w-50"));
+
+        var header = ConvertBytes(WordFixtureFactory.Build("header-row"));
+        Assert.Contains("display: table-header-group;", header.Css, StringComparison.Ordinal);
+        Assert.Contains("page-break-inside: avoid;", header.Css, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void HtmlWrittenToTheFileIsIndented()
     {
         var result = ConvertBytes(WordFixtureFactory.Build("lists"));

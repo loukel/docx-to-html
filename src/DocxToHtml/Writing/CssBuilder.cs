@@ -210,8 +210,8 @@ internal sealed class CssBuilder
         var banded = MarkupSafety.ClassToken(prefix + "t-banded");
 
         var builder = new StringBuilder();
-        builder.Append("body {\n");
-        builder.Append("  font-family: ").Append(QuoteFont(fontFamily)).Append(", Carlito, \"Segoe UI\", sans-serif;\n");
+        builder.Append("body, .mce-content-body {\n");
+        builder.Append("  font-family: ").Append(QuoteFont(fontFamily)).Append(", Carlito, \"Liberation Sans\", \"DejaVu Sans\", \"Segoe UI\", sans-serif;\n");
         builder.Append("  font-size: ").Append(fontSize).Append(";\n");
         builder.Append("  line-height: ").Append(lineHeight).Append(";\n");
         builder.Append("  color: #222222;\n");
@@ -220,6 +220,8 @@ internal sealed class CssBuilder
         builder.Append("  margin: 0.8em 0 0.4em;\n");
         builder.Append("  font-weight: bold;\n");
         builder.Append("  line-height: 1.2;\n");
+        builder.Append("  page-break-after: avoid;\n");
+        builder.Append("  page-break-inside: avoid;\n");
         builder.Append("}\n");
         builder.Append("p {\n");
         builder.Append("  margin: ").Append(before).Append(" 0 ").Append(after).Append(";\n");
@@ -244,13 +246,19 @@ internal sealed class CssBuilder
             builder.Append("  font-weight: bold;\n");
             builder.Append("  text-align: left;\n");
             builder.Append("}\n");
+            builder.Append("tr {\n");
+            builder.Append("  page-break-inside: avoid;\n");
+            builder.Append("}\n");
+            builder.Append("thead {\n");
+            builder.Append("  display: table-header-group;\n");
+            builder.Append("}\n");
             if (Tables().Any(table => table.FirstRowLook))
                 builder.Append("table.").Append(firstRow).Append(" thead th {\n  background: #f3f6fb;\n}\n");
             if (Tables().Any(table => table.BandedRows))
                 builder.Append("table.").Append(banded).Append(" tbody tr:nth-child(even) {\n  background: #f7f7f7;\n}\n");
         }
 
-        builder.Append("img {\n  max-width: 100%;\n  height: auto;\n}\n");
+        builder.Append("img {\n  max-width: 100%;\n  page-break-inside: avoid;\n}\n");
         builder.Append("a {\n  color: #0563c1;\n}\n");
         return builder.ToString();
     }

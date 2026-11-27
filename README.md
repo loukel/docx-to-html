@@ -50,6 +50,8 @@ ConversionResult DocxToHtmlConverter.ConvertToFolder(string docxPath, string out
 
 `ConversionResult` contains `Html`, `Css`, `Images`, `Warnings`, and `Headings`.
 
+The same stylesheet is meant for TinyMCE and wkhtmltopdf. Load it in TinyMCE with `content_css`, and paste the body fragment rather than the full document. wkhtmltopdf uses the full document: keep `styles.css` beside `index.html`, or embed the CSS. Word page breaks use `page-break-before: always`. Column widths are on both `col` and the cells, because TinyMCE often drops `colgroup`. Headings and table rows stay together in the PDF. The font list falls back to Carlito, Liberation Sans, and DejaVu Sans when Calibri is not installed.
+
 ## Options
 
 Create a `DocxToHtmlOptions` and pass it to any convert method. The converter does not modify the instance.

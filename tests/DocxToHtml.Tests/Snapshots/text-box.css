@@ -1,5 +1,5 @@
-body {
-  font-family: "Calibri", Carlito, "Segoe UI", sans-serif;
+body, .mce-content-body {
+  font-family: "Calibri", Carlito, "Liberation Sans", "DejaVu Sans", "Segoe UI", sans-serif;
   font-size: 11pt;
   line-height: 1.15;
   color: #222222;
@@ -8,6 +8,8 @@ h1, h2, h3, h4, h5, h6 {
   margin: 0.8em 0 0.4em;
   font-weight: bold;
   line-height: 1.2;
+  page-break-after: avoid;
+  page-break-inside: avoid;
 }
 p {
   margin: 0 0 8pt;
@@ -18,7 +20,7 @@ ul, ol {
 }
 img {
   max-width: 100%;
-  height: auto;
+  page-break-inside: avoid;
 }
 a {
   color: #0563c1;
@@ -27,4 +29,5 @@ a {
   border: 1px solid #cccccc;
   padding: 0.75em;
   margin: 0.5em 0;
+  page-break-inside: avoid;
 }
