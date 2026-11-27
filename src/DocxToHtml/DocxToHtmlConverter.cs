@@ -1,3 +1,4 @@
+using System.IO;
 using DocumentFormat.OpenXml.Packaging;
 using DocxToHtml.Reading;
 using DocxToHtml.Writing;
