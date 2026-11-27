@@ -177,6 +177,10 @@ internal sealed class BodyWriter
     private static bool HasVisibleInlines(IReadOnlyList<Inline> inlines) =>
         inlines.Any(ParagraphBlock.IsVisibleInline);
 
+    private static bool IsStructuralListItem(ListItemModel item) =>
+        (item.Paragraph is null || !HasVisibleInlines(item.Paragraph.Inlines))
+        && item.NestedLists.Count > 0;
+
     private void WriteBookmarkAnchors(ParagraphBlock paragraph)
     {
         if (!string.IsNullOrEmpty(paragraph.ElementId))
@@ -206,9 +210,22 @@ internal sealed class BodyWriter
     private void WriteList(ListBlock list)
     {
         var tag = list.IsBullet ? "ul" : "ol";
-        html.Append('<').Append(tag);
+        var classes = new List<string>();
         if (!string.IsNullOrEmpty(list.FormatClass))
-            html.Append(" class=\"").Append(FeatureClass(list.FormatClass, "list-style-type: " + list.FormatClass + ";")).Append('"');
+            classes.Add(FeatureClass(list.FormatClass, "list-style-type: " + list.FormatClass + ";"));
+        // An empty parent item is only there so a deeper level has somewhere to sit.
+        // Without this, that item paints a bullet and then the real sub-list paints more.
+        if (list.Items.Count > 0 && list.Items.All(IsStructuralListItem))
+        {
+            classes.Add(FeatureClass(
+                "list-plain",
+                "list-style: none;",
+                "margin: 0;",
+                "padding: 0;"));
+        }
+
+        html.Append('<').Append(tag);
+        AppendClass(classes);
         if (!list.IsBullet && list.Start is int start && start != 1)
             html.Append(" start=\"").Append(start.ToString(CultureInfo.InvariantCulture)).Append('"');
         html.Append(">\n");
@@ -217,13 +234,22 @@ internal sealed class BodyWriter
         {
             var paragraph = item.Paragraph;
             var heading = paragraph is not null && IsHeadingTag(TagFor(paragraph));
-            html.Append("<li");
-            if (paragraph is not null && !heading)
+            var itemClasses = new List<string>();
+            if (IsStructuralListItem(item))
             {
-                AppendClass(ClassesFor(paragraph));
-                if (!string.IsNullOrEmpty(paragraph.ElementId))
-                    html.Append(" id=\"").Append(MarkupSafety.Encode(paragraph.ElementId)).Append('"');
+                itemClasses.Add(FeatureClass(
+                    "marker-none",
+                    "list-style: none;"));
             }
+            else if (paragraph is not null && !heading)
+            {
+                itemClasses.AddRange(ClassesFor(paragraph));
+            }
+
+            html.Append("<li");
+            AppendClass(itemClasses);
+            if (paragraph is not null && !heading && !string.IsNullOrEmpty(paragraph.ElementId))
+                html.Append(" id=\"").Append(MarkupSafety.Encode(paragraph.ElementId)).Append('"');
             html.Append('>');
             if (paragraph is not null)
             {

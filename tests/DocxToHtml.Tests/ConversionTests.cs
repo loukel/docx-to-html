@@ -201,6 +201,29 @@ public class ConversionTests
     }
 
     [Fact]
+    public void SubBulletsDoNotPaintAnEmptyParentBullet()
+    {
+        var nestedUnderParent = new WordDocumentBuilder("Nested under a parent");
+        nestedUnderParent.AddNumbering();
+        nestedUnderParent.AddListItem("Fruit", 1, 0);
+        nestedUnderParent.AddListItem("Apple", 1, 1);
+        var parented = new HtmlParser().ParseDocument(ConvertBytes(nestedUnderParent.Finish()).Html);
+        Assert.Empty(parented.QuerySelectorAll(".marker-none, .list-plain"));
+        Assert.Equal("Fruit", parented.QuerySelector("li")?.ChildNodes.OfType<AngleSharp.Dom.IText>().FirstOrDefault()?.TextContent);
+
+        var subOnly = new WordDocumentBuilder("Sub bullets only");
+        subOnly.AddNumbering();
+        subOnly.AddListItem("Apple", 1, 1);
+        subOnly.AddListItem("Pear", 1, 1);
+        var result = ConvertBytes(subOnly.Finish());
+        var document = new HtmlParser().ParseDocument(result.Html);
+        Assert.Contains("list-style: none;", result.Css, StringComparison.Ordinal);
+        Assert.Equal(2, document.QuerySelectorAll("li:not(.marker-none)").Length);
+        Assert.Equal(["Apple", "Pear"], document.QuerySelectorAll("li:not(.marker-none)").Select(item => item.TextContent.Trim()).ToArray());
+        Assert.DoesNotContain(document.QuerySelectorAll("li.marker-none"), item => item.ChildNodes.OfType<AngleSharp.Dom.IText>().Any(text => !string.IsNullOrWhiteSpace(text.TextContent)));
+    }
+
+    [Fact]
     public void HtmlWrittenToTheFileIsIndented()
     {
         var result = ConvertBytes(WordFixtureFactory.Build("lists"));
