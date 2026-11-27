@@ -1,4 +1,3 @@
-using System.IO.Packaging;
 using DocumentFormat.OpenXml.Packaging;
 using DocxToHtml.Reading;
 using DocxToHtml.Writing;
@@ -87,6 +86,6 @@ public static class DocxToHtmlConverter
     }
 
     private static bool IsPackageException(Exception exception) =>
-        exception is FileFormatException
+        exception is System.IO.FileFormatException
         || exception.GetType().Namespace?.StartsWith("DocumentFormat.OpenXml", StringComparison.Ordinal) == true;
 }
