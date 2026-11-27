@@ -148,6 +148,12 @@ internal sealed class BodyWriter
 
     private void WriteParagraph(ParagraphBlock paragraph)
     {
+        if (IsHeadingTag(TagFor(paragraph)) && !HasVisibleInlines(paragraph.Inlines))
+        {
+            WriteBookmarkAnchors(paragraph);
+            return;
+        }
+
         if (!options.IncludeEmptyParagraphs && !paragraph.HasVisibleContent())
             return;
 
@@ -164,6 +170,21 @@ internal sealed class BodyWriter
                 WriteTextBox(segment.TextBox.Blocks);
             else if (segment.Inlines.Count > 0 || (options.IncludeEmptyParagraphs && paragraph.HasVisibleContent()))
                 WriteParagraphElement(paragraph, segment.Inlines);
+        }
+    }
+
+    private static bool HasVisibleInlines(IReadOnlyList<Inline> inlines) =>
+        inlines.Any(ParagraphBlock.IsVisibleInline);
+
+    private void WriteBookmarkAnchors(ParagraphBlock paragraph)
+    {
+        if (!string.IsNullOrEmpty(paragraph.ElementId))
+            html.Append("<a id=\"").Append(MarkupSafety.Encode(paragraph.ElementId)).Append("\"></a>");
+
+        foreach (var inline in paragraph.Inlines)
+        {
+            if (inline is BookmarkInline bookmark)
+                html.Append("<a id=\"").Append(MarkupSafety.Encode(bookmark.Identifier)).Append("\"></a>");
         }
     }
 
@@ -205,8 +226,10 @@ internal sealed class BodyWriter
             html.Append('>');
             if (paragraph is not null)
             {
-                if (heading)
+                if (heading && HasVisibleInlines(paragraph.Inlines))
                     WriteParagraphElement(paragraph, paragraph.Inlines);
+                else if (heading)
+                    WriteBookmarkAnchors(paragraph);
                 else
                     WriteInlines(paragraph.Inlines, paragraph.Baseline, allowTextBox: true);
             }

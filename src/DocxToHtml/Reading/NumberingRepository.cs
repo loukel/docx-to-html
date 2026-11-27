@@ -8,6 +8,7 @@ namespace DocxToHtml.Reading;
 internal sealed class NumberingRepository
 {
     private readonly Dictionary<int, AbstractNumberingDefinition> definitions = new();
+    private readonly Dictionary<int, int[]> countersByNumberingId = new();
 
     public static NumberingRepository Load(MainDocumentPart mainDocumentPart)
     {
@@ -73,6 +74,67 @@ internal sealed class NumberingRepository
         return new ListInformation(numberingId, level, isBullet, formatClass, start);
     }
 
+    /// <summary>
+    /// Advances the counters for one numbered heading and returns the label, including the
+    /// separator before the heading text. Heading numbers stay in the heading instead of
+    /// becoming a nested list.
+    /// </summary>
+    public string? TakeLabel(int numberingId, int level)
+    {
+        if (!definitions.TryGetValue(numberingId, out var definition))
+            return null;
+
+        if (!definition.TryGetExactLevel(level, out var current))
+            return null;
+
+        if (string.Equals(current.Format, "none", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        if (!countersByNumberingId.TryGetValue(numberingId, out var counters))
+        {
+            counters = new int[9];
+            countersByNumberingId[numberingId] = counters;
+        }
+
+        var clampedLevel = Math.Clamp(level, 0, counters.Length - 1);
+        for (var deeperLevel = clampedLevel + 1; deeperLevel < counters.Length; deeperLevel++)
+            counters[deeperLevel] = 0;
+
+        if (counters[clampedLevel] <= 0)
+            counters[clampedLevel] = Math.Max(current.Start, 1);
+        else
+            counters[clampedLevel]++;
+
+        if (string.Equals(current.Format, "bullet", StringComparison.OrdinalIgnoreCase))
+        {
+            var bullet = string.IsNullOrEmpty(current.LevelText) ? "•" : current.LevelText;
+            return bullet + current.Separator;
+        }
+
+        var pattern = string.IsNullOrEmpty(current.LevelText)
+            ? "%" + (clampedLevel + 1).ToString(CultureInfo.InvariantCulture)
+            : current.LevelText;
+        var label = pattern;
+        for (var placeholder = 9; placeholder >= 1; placeholder--)
+        {
+            var token = "%" + placeholder.ToString(CultureInfo.InvariantCulture);
+            if (!label.Contains(token, StringComparison.Ordinal))
+                continue;
+
+            var format = current.LegalNumbering
+                ? "decimal"
+                : definition.TryGetExactLevel(placeholder - 1, out var referencedLevel)
+                    ? referencedLevel.Format ?? "decimal"
+                    : "decimal";
+            label = label.Replace(token, FormatNumber(counters[placeholder - 1], format), StringComparison.Ordinal);
+        }
+
+        if (string.IsNullOrWhiteSpace(label))
+            return null;
+
+        return label + current.Separator;
+    }
+
     private static AbstractNumberingDefinition ReadAbstract(AbstractNum abstractNumbering)
     {
         var definition = new AbstractNumberingDefinition();
@@ -85,12 +147,76 @@ internal sealed class NumberingRepository
     private static LevelDefinition ReadLevel(Level level)
     {
         var format = OpenXmlValues.Attribute(level.NumberingFormat, "val") ?? "decimal";
+        var suffix = OpenXmlValues.Attribute(OpenXmlValues.Child(level, "suff"), "val");
         return new LevelDefinition
         {
             Level = level.LevelIndex?.Value ?? 0,
             Start = level.StartNumberingValue?.Val?.Value ?? 1,
-            Format = format
+            Format = format,
+            LevelText = OpenXmlValues.Attribute(OpenXmlValues.Child(level, "lvlText"), "val"),
+            LegalNumbering = OpenXmlValues.ToggleChild(level, "isLgl") == true,
+            Separator = suffix is not null && suffix.Equals("nothing", StringComparison.OrdinalIgnoreCase) ? "" : " "
         };
+    }
+
+    private static string FormatNumber(int value, string format)
+    {
+        if (value < 0)
+            value = 0;
+
+        return format.ToLowerInvariant() switch
+        {
+            "lowerletter" => ToLetters(value, uppercase: false),
+            "upperletter" => ToLetters(value, uppercase: true),
+            "lowerroman" => ToRoman(value).ToLowerInvariant(),
+            "upperroman" => ToRoman(value),
+            "decimalzero" => value.ToString("00", CultureInfo.InvariantCulture),
+            "bullet" or "none" => "",
+            _ => value.ToString(CultureInfo.InvariantCulture)
+        };
+    }
+
+    private static string ToLetters(int value, bool uppercase)
+    {
+        if (value <= 0)
+            return "0";
+
+        var characters = new List<char>();
+        var remaining = value;
+        while (remaining > 0)
+        {
+            remaining--;
+            characters.Add((char)((uppercase ? 'A' : 'a') + remaining % 26));
+            remaining /= 26;
+        }
+
+        characters.Reverse();
+        return new string(characters.ToArray());
+    }
+
+    private static string ToRoman(int value)
+    {
+        if (value <= 0)
+            return "0";
+
+        var numerals = new (int Amount, string Symbol)[]
+        {
+            (1000, "M"), (900, "CM"), (500, "D"), (400, "CD"),
+            (100, "C"), (90, "XC"), (50, "L"), (40, "XL"),
+            (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I")
+        };
+        var roman = new StringBuilder();
+        var remaining = value;
+        foreach (var (amount, symbol) in numerals)
+        {
+            while (remaining >= amount)
+            {
+                roman.Append(symbol);
+                remaining -= amount;
+            }
+        }
+
+        return roman.ToString();
     }
 
     private sealed class AbstractNumberingDefinition
@@ -110,9 +236,18 @@ internal sealed class NumberingRepository
             existing.Start = start;
         }
 
-        public bool TryGetLevel(int level, out LevelDefinition definition)
+        public bool TryGetExactLevel(int level, out LevelDefinition definition)
         {
             if (levels.TryGetValue(level, out definition!))
+                return true;
+
+            definition = null!;
+            return false;
+        }
+
+        public bool TryGetLevel(int level, out LevelDefinition definition)
+        {
+            if (TryGetExactLevel(level, out definition))
                 return true;
 
             if (levels.TryGetValue(0, out definition!))
@@ -131,7 +266,10 @@ internal sealed class NumberingRepository
                 {
                     Level = pair.Value.Level,
                     Start = pair.Value.Start,
-                    Format = pair.Value.Format
+                    Format = pair.Value.Format,
+                    LevelText = pair.Value.LevelText,
+                    LegalNumbering = pair.Value.LegalNumbering,
+                    Separator = pair.Value.Separator
                 };
             }
 
@@ -144,6 +282,9 @@ internal sealed class NumberingRepository
         public int Level { get; init; }
         public int Start { get; set; }
         public string? Format { get; init; }
+        public string? LevelText { get; init; }
+        public bool LegalNumbering { get; init; }
+        public string Separator { get; init; } = " ";
     }
 }
 

@@ -243,7 +243,8 @@ internal sealed class InlineReader
     private void ReadBookmark(OpenXmlElement bookmark, List<Inline> destination, InlineCursor cursor)
     {
         var name = OpenXmlValues.Attribute(bookmark, "name");
-        if (string.IsNullOrWhiteSpace(name) || name.StartsWith('_'))
+        // Contents entries link to bookmarks named _Toc…. _GoBack is only Word's return position.
+        if (string.IsNullOrWhiteSpace(name) || name.Equals("_GoBack", StringComparison.OrdinalIgnoreCase))
             return;
 
         var identifier = MarkupSafety.Identifier(name);
@@ -361,7 +362,7 @@ internal sealed class InlineReader
         var anchor = OpenXmlValues.Attribute(hyperlink, "anchor");
         if (!string.IsNullOrEmpty(anchor))
         {
-            var fragment = "#" + anchor;
+            var fragment = "#" + MarkupSafety.Identifier(anchor);
             href = string.IsNullOrEmpty(href) ? fragment : href + fragment;
         }
 

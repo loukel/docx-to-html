@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using AngleSharp.Dom;
 using AngleSharp.Html.Parser;
+using DocumentFormat.OpenXml.Wordprocessing;
 using DocxToHtml.Tests.Support;
 
 namespace DocxToHtml.Tests;
@@ -112,6 +113,49 @@ public class ConversionTests
         var result = ConvertBytes(WordFixtureFactory.Build("fragmented-runs"));
         Assert.Contains("<strong>Hello</strong>", result.Html, StringComparison.Ordinal);
         Assert.Single(Regex.Matches(result.Html, "<strong>"));
+    }
+
+    [Fact]
+    public void NumberedHeadingsKeepTheNumberInsideTheHeading()
+    {
+        var builder = new WordDocumentBuilder("Numbered headings");
+        builder.AddMultiLevelHeadingNumbering();
+        builder.AddParagraph("Scope", "Heading1");
+        builder.AddParagraph("General", "Heading2");
+        builder.AddParagraph("More", "Heading3");
+        builder.AddParagraph("Deep", "Heading4");
+        builder.AddParagraph("Other", "Heading2");
+        builder.AddParagraph("", "Heading1");
+        var result = ConvertBytes(builder.Finish());
+        var document = new HtmlParser().ParseDocument(result.Html);
+
+        Assert.Empty(document.QuerySelectorAll("ol, ul"));
+        Assert.Equal(
+            ["1 Scope", "1.1 General", "1.1.1 More", "1.1.1.1 Deep", "1.2 Other"],
+            result.Headings.Select(heading => heading.Text).ToArray());
+        Assert.DoesNotContain(document.QuerySelectorAll("h1, h2, h3, h4, h5, h6"), heading => string.IsNullOrWhiteSpace(heading.TextContent));
+        Assert.Contains(">1.1.1.1 Deep</h4>", result.Html, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ContentsLinksFindHeadingBookmarks()
+    {
+        var builder = new WordDocumentBuilder("Contents");
+        builder.AddParagraphStyle("Heading1", "heading 1", outlineLevel: 0, bold: true);
+        builder.Add(new Paragraph(
+            new ParagraphProperties(new ParagraphStyleId { Val = "Heading1" }),
+            new BookmarkStart { Id = "7", Name = "_Toc12345" },
+            new Run(new Text("Scope")),
+            new BookmarkEnd { Id = "7" }));
+        builder.Add(new Paragraph(
+            new Hyperlink(new Run(new Text("Scope"))) { Anchor = "_Toc12345" }));
+        var result = ConvertBytes(builder.Finish());
+        var document = new HtmlParser().ParseDocument(result.Html);
+
+        var heading = document.QuerySelector("h1");
+        Assert.NotNull(heading);
+        Assert.Equal("_Toc12345", heading!.Id);
+        Assert.Equal("#_Toc12345", document.QuerySelector("a[href]")?.GetAttribute("href"));
     }
 
     [Fact]

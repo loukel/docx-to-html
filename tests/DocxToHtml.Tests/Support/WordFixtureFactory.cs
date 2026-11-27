@@ -463,6 +463,44 @@ internal sealed class WordDocumentBuilder
         return new Hyperlink(new Run(new Text(text))) { Id = relationship.Id };
     }
 
+    public void AddMultiLevelHeadingNumbering()
+    {
+        var numbering = new Numbering();
+        var abstractNumbering = new AbstractNum { AbstractNumberId = 10 };
+        abstractNumbering.Append(MultiLevel(0, "%1"));
+        abstractNumbering.Append(MultiLevel(1, "%1.%2"));
+        abstractNumbering.Append(MultiLevel(2, "%1.%2.%3"));
+        abstractNumbering.Append(MultiLevel(3, "%1.%2.%3.%4"));
+        numbering.Append(abstractNumbering);
+        numbering.Append(new NumberingInstance(new AbstractNumId { Val = 10 }) { NumberID = 4 });
+        var part = main.AddNewPart<NumberingDefinitionsPart>();
+        part.Numbering = numbering;
+
+        for (var level = 1; level <= 4; level++)
+        {
+            AddParagraphStyle($"Heading{level}", $"heading {level}", outlineLevel: level - 1, bold: true);
+            var style = styles!.Elements<Style>().Last();
+            var paragraphProperties = style.Elements<StyleParagraphProperties>().FirstOrDefault();
+            if (paragraphProperties is null)
+            {
+                paragraphProperties = new StyleParagraphProperties();
+                style.Append(paragraphProperties);
+            }
+
+            paragraphProperties.Append(new NumberingProperties(
+                new NumberingLevelReference { Val = level - 1 },
+                new NumberingId { Val = 4 }));
+        }
+    }
+
+    private static Level MultiLevel(int index, string levelText) =>
+        new(
+            new StartNumberingValue { Val = 1 },
+            new NumberingFormat { Val = NumberFormatValues.Decimal },
+            new LevelText { Val = levelText },
+            new LevelSuffix { Val = LevelSuffixValues.Space })
+        { LevelIndex = index };
+
     public void AddNumbering()
     {
         var numbering = new Numbering();

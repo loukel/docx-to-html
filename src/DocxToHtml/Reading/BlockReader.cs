@@ -111,10 +111,15 @@ internal sealed class BlockReader
             if (numbering is NumberingSlot.UnsetNumbering)
                 numbering = resolved.Numbering;
 
+            var activeNumbering = numbering as NumberingSlot.ActiveNumbering;
             ListInformation? list = null;
-            if (numbering is NumberingSlot.ActiveNumbering active)
+            if (activeNumbering is not null && decision.Level is null)
             {
-                list = context.Numbering.Describe(active.NumberingId, active.Level, context.Warnings, context.Location);
+                list = context.Numbering.Describe(
+                    activeNumbering.NumberingId,
+                    activeNumbering.Level,
+                    context.Warnings,
+                    context.Location);
             }
 
             var block = new ParagraphBlock
@@ -131,6 +136,15 @@ internal sealed class BlockReader
                 DirectFormatting = PropertyReader.ReadParagraph(properties, context.ThemeColors, context.Warnings, context.Location)
             };
             inlineReader.ReadParagraph(paragraph, block);
+            if (activeNumbering is not null
+                && decision.Level is not null
+                && block.Inlines.Any(ParagraphBlock.IsVisibleInline))
+            {
+                var headingNumber = context.Numbering.TakeLabel(activeNumbering.NumberingId, activeNumbering.Level);
+                if (!string.IsNullOrEmpty(headingNumber))
+                    block.Inlines.Insert(0, new TextRunInline(headingNumber, block.Baseline));
+            }
+
             return block;
         }
         finally
