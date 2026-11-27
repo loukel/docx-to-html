@@ -116,6 +116,16 @@ public class ConversionTests
     }
 
     [Fact]
+    public void HtmlWrittenToTheFileIsIndented()
+    {
+        var result = ConvertBytes(WordFixtureFactory.Build("lists"));
+        Assert.StartsWith("<!DOCTYPE html>\n<html lang=\"en-US\">\n  <head>\n    <meta charset=\"utf-8\">\n", result.Html, StringComparison.Ordinal);
+        Assert.Contains("\n  <body>\n    <ul>\n      <li>Fruit<ul>\n          <li>Apple</li>\n", result.Html, StringComparison.Ordinal);
+        Assert.Contains("\n    <ol start=\"5\">\n      <li>Fifth</li>\n    </ol>\n", result.Html, StringComparison.Ordinal);
+        Assert.EndsWith("</body>\n</html>\n", result.Html, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void NumberedHeadingsKeepTheNumberInsideTheHeading()
     {
         var builder = new WordDocumentBuilder("Numbered headings");

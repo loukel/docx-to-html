@@ -1,34 +1,35 @@
 <!DOCTYPE html>
 <html lang="en-US">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Nested table</title>
-<link rel="stylesheet" href="styles.css">
-</head>
-<body>
-<table class="t-table-grid">
-<colgroup>
-<col class="w-50">
-<col class="w-50">
-</colgroup>
-<tbody>
-<tr>
-<td><p>Outer</p>
-<table class="t-table-grid">
-<colgroup>
-<col class="w-50">
-<col class="w-50">
-</colgroup>
-<tbody>
-<tr>
-<td>Inner</td>
-</tr>
-</tbody>
-</table>
-</td>
-</tr>
-</tbody>
-</table>
-</body>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Nested table</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <table class="t-table-grid">
+      <colgroup>
+        <col class="w-50">
+        <col class="w-50">
+      </colgroup>
+      <tbody>
+        <tr>
+          <td>
+            <p>Outer</p>
+            <table class="t-table-grid">
+              <colgroup>
+                <col class="w-50">
+                <col class="w-50">
+              </colgroup>
+              <tbody>
+                <tr>
+                  <td>Inner</td>
+                </tr>
+              </tbody>
+            </table>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </body>
 </html>

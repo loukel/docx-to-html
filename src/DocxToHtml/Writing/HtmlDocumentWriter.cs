@@ -18,6 +18,7 @@ internal sealed class HtmlDocumentWriter
         var html = options.OutputMode == HtmlOutputMode.BodyFragment
             ? htmlBuilder.ToString()
             : WrapDocument(document, options, htmlBuilder.ToString(), stylesheet);
+        html = HtmlFormatter.Format(html);
 
         return new ConversionResult
         {

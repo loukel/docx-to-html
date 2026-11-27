@@ -46,7 +46,7 @@ ConversionResult DocxToHtmlConverter.Convert(Stream docxStream, DocxToHtmlOption
 ConversionResult DocxToHtmlConverter.ConvertToFolder(string docxPath, string outputDirectory, DocxToHtmlOptions? options = null);
 ```
 
-`Convert(Stream)` copies the stream and does not dispose the caller's stream. A file that is not a package throws `InvalidDataException`. `ConvertToFolder` writes `index.html`, the stylesheet named by `CssFileName` (default `styles.css`), and image files under `ImageFolder` (default `images`).
+`Convert(Stream)` copies the stream and does not dispose the caller's stream. A file that is not a package throws `InvalidDataException`. `ConvertToFolder` writes `index.html`, the stylesheet named by `CssFileName` (default `styles.css`), and image files under `ImageFolder` (default `images`). The HTML file is indented: each block sits on its own line, and the text of a heading, paragraph, or table cell stays on that element's line.
 
 `ConversionResult` contains `Html`, `Css`, `Images`, `Warnings`, and `Headings`.
 
