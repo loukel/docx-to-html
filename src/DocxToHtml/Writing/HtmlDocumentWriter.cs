@@ -105,7 +105,7 @@ internal sealed class BodyWriter
     {
         if (document.HeaderBlocks.Count > 0)
         {
-            html.Append("<header class=\"").Append(Prefix("doc-header")).Append("\">\n");
+            html.Append("<header class=\"").Append(FeatureClass("doc-header", "color: #444444;", "margin-bottom: 1.5em;")).Append("\">\n");
             WriteBlocks(document.HeaderBlocks);
             html.Append("</header>\n");
         }
@@ -116,7 +116,7 @@ internal sealed class BodyWriter
 
         if (document.FooterBlocks.Count > 0)
         {
-            html.Append("<footer class=\"").Append(Prefix("doc-footer")).Append("\">\n");
+            html.Append("<footer class=\"").Append(FeatureClass("doc-footer", "color: #444444;", "margin-top: 1.5em;")).Append("\">\n");
             WriteBlocks(document.FooterBlocks);
             html.Append("</footer>\n");
         }
@@ -208,7 +208,7 @@ internal sealed class BodyWriter
         var tag = list.IsBullet ? "ul" : "ol";
         html.Append('<').Append(tag);
         if (!string.IsNullOrEmpty(list.FormatClass))
-            html.Append(" class=\"").Append(Prefix(list.FormatClass)).Append('"');
+            html.Append(" class=\"").Append(FeatureClass(list.FormatClass, "list-style-type: " + list.FormatClass + ";")).Append('"');
         if (!list.IsBullet && list.Start is int start && start != 1)
             html.Append(" start=\"").Append(start.ToString(CultureInfo.InvariantCulture)).Append('"');
         html.Append(">\n");
@@ -339,7 +339,11 @@ internal sealed class BodyWriter
 
     private void WriteTextBox(IReadOnlyList<Block> blocks)
     {
-        html.Append("<div class=\"").Append(Prefix("textbox")).Append("\">\n");
+        html.Append("<div class=\"").Append(FeatureClass(
+            "textbox",
+            "border: 1px solid #cccccc;",
+            "padding: 0.75em;",
+            "margin: 0.5em 0;")).Append("\">\n");
         WriteBlocks(blocks);
         html.Append("</div>\n");
     }
@@ -350,7 +354,11 @@ internal sealed class BodyWriter
         if (relevant.Count == 0)
             return;
 
-        var sectionClass = Prefix(endnotes ? "endnotes" : "footnotes");
+        var sectionClass = FeatureClass(
+            endnotes ? "endnotes" : "footnotes",
+            "margin-top: 2em;",
+            "border-top: 1px solid #cccccc;",
+            "font-size: 0.92em;");
         var marker = endnotes ? "en" : "fn";
         html.Append("<section class=\"").Append(sectionClass).Append("\">\n<ol>\n");
         foreach (var note in relevant)
@@ -388,10 +396,14 @@ internal sealed class BodyWriter
                     html.Append("<br>");
                     break;
                 case PageBreakInline:
-                    html.Append("<hr class=\"").Append(Prefix("page-break")).Append("\">");
+                    html.Append("<hr class=\"").Append(FeatureClass(
+                        "page-break",
+                        "border: 0;",
+                        "border-top: 1px solid #cccccc;",
+                        "margin: 1.5em 0;")).Append("\">");
                     break;
                 case TabInline:
-                    html.Append("<span class=\"").Append(Prefix("tab")).Append("\"></span>");
+                    html.Append("<span class=\"").Append(FeatureClass("tab", "display: inline-block;", "width: 2em;")).Append("\"></span>");
                     break;
                 case NonBreakingHyphenInline:
                     html.Append("&#8209;");
@@ -417,7 +429,7 @@ internal sealed class BodyWriter
                     WriteNoteReference(note);
                     break;
                 case CommentInline comment:
-                    html.Append("<span class=\"").Append(Prefix("comment")).Append("\">")
+                    html.Append("<span class=\"").Append(FeatureClass("comment", "color: #666666;", "font-size: 0.9em;")).Append("\">")
                         .Append(HtmlText.EncodePreservingSpaces(comment.Text))
                         .Append("</span>");
                     break;
@@ -524,7 +536,7 @@ internal sealed class BodyWriter
         var number = note.DisplayNumber.ToString(CultureInfo.InvariantCulture);
         html.Append("<sup><a href=\"#").Append(marker).Append('-').Append(number)
             .Append("\" id=\"").Append(marker).Append("ref-").Append(number)
-            .Append("\" class=\"").Append(Prefix("footnote-ref")).Append("\">")
+            .Append("\" class=\"").Append(FeatureClass("footnote-ref", "text-decoration: none;")).Append("\">")
             .Append(number)
             .Append("</a></sup>");
     }
@@ -595,29 +607,52 @@ internal sealed class BodyWriter
         if (direct.Alignment is string alignment && !string.Equals(alignment, style.Alignment, StringComparison.Ordinal))
             classes.Add(registry.Register("align-" + alignment, "text-align: " + alignment + ";"));
 
-        AddTwipClass(classes, "before", direct.SpacingBeforeTwips, style.SpacingBeforeTwips, "margin-top");
-        AddTwipClass(classes, "after", direct.SpacingAfterTwips, style.SpacingAfterTwips, "margin-bottom");
-        AddTwipClass(classes, "indent", direct.IndentLeftTwips, style.IndentLeftTwips, "margin-left");
-        AddTwipClass(classes, "indent-r", direct.IndentRightTwips, style.IndentRightTwips, "margin-right");
-        AddTwipClass(classes, "first", direct.FirstLineTwips, style.FirstLineTwips, "text-indent");
-        if (direct.HangingTwips is int hanging && hanging != style.HangingTwips)
-        {
-            var points = UnitConverter.TwipsToPoints(hanging);
-            classes.Add(registry.Register(
-                "hang-" + CssNumbers.PointToken(points) + "pt",
-                "text-indent: -" + CssNumbers.Points(points) + "pt;"));
-        }
+        var tokens = new List<string>();
+        var declarations = new List<string>();
+        AddSpacingClass(tokens, declarations, "mt", direct.SpacingBeforeTwips, style.SpacingBeforeTwips, "margin-top");
+        AddSpacingClass(tokens, declarations, "mb", direct.SpacingAfterTwips, style.SpacingAfterTwips, "margin-bottom");
+        AddSpacingClass(tokens, declarations, "ml", direct.IndentLeftTwips, style.IndentLeftTwips, "margin-left");
+        AddSpacingClass(tokens, declarations, "mr", direct.IndentRightTwips, style.IndentRightTwips, "margin-right");
+        if (direct.FirstLineTwips is int firstLine)
+            AddSpacingClass(tokens, declarations, "ti", firstLine, style.FirstLineTwips, "text-indent");
+        else if (direct.HangingTwips is int hanging)
+            AddSpacingClass(tokens, declarations, "ti-n", hanging, style.HangingTwips, "text-indent", negative: true);
+
+        if (tokens.Count > 0)
+            classes.Add(registry.Register(string.Join('-', tokens), declarations.ToArray()));
     }
 
-    private void AddTwipClass(List<string> classes, string token, int? direct, int? styleValue, string property)
+    private static void AddSpacingClass(
+        List<string> tokens,
+        List<string> declarations,
+        string name,
+        int? direct,
+        int? styleValue,
+        string property,
+        bool negative = false)
     {
-        if (direct is not int twips || twips == styleValue)
+        if (direct is not int twips)
             return;
 
-        var points = UnitConverter.TwipsToPoints(twips);
-        classes.Add(registry.Register(
-            token + "-" + CssNumbers.PointToken(points) + "pt",
-            property + ": " + CssNumbers.Points(points) + "pt;"));
+        var snapped = SnapSpacingPoints(UnitConverter.TwipsToPoints(twips));
+        var styleSnapped = styleValue is int styleTwips ? SnapSpacingPoints(UnitConverter.TwipsToPoints(styleTwips)) : 0;
+        if (snapped == styleSnapped)
+            return;
+
+        tokens.Add(name + "-" + snapped.ToString(CultureInfo.InvariantCulture));
+        var points = (negative ? "-" : "") + snapped.ToString(CultureInfo.InvariantCulture) + "pt";
+        declarations.Add(property + ": " + points + ";");
+    }
+
+    private static int SnapSpacingPoints(double points)
+    {
+        var snapped = Math.Round(points / 4d, MidpointRounding.AwayFromZero) * 4d;
+        if (snapped < 0)
+            snapped = 0;
+        if (snapped > 96)
+            snapped = 96;
+
+        return (int)snapped;
     }
 
     private List<string> ClassesFor(ParagraphBlock paragraph)
@@ -748,6 +783,14 @@ internal sealed class BodyWriter
     }
 
     private string Prefix(string className) => MarkupSafety.ClassToken((options.ClassPrefix ?? "") + className);
+
+    private string FeatureClass(string name, params string[] declarations)
+    {
+        if (options.IncludeBaseCss)
+            registry.Register(name, declarations);
+
+        return Prefix(name);
+    }
 
     private void AppendClass(IReadOnlyList<string> classes)
     {

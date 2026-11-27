@@ -39,7 +39,7 @@ internal static class HtmlFormatter
         var tokens = Tokenize(html);
         var formatted = new StringBuilder();
         WriteChildren(tokens, 0, tokens.Count, formatted, indentLevel: 0, firstBlockContinuesLine: false);
-        return formatted.ToString();
+        return CloseMissingEndTags(formatted.ToString());
     }
 
     private static void WriteChildren(
@@ -73,6 +73,10 @@ internal static class HtmlFormatter
 
             if (token.Kind == HtmlTokenKind.End)
             {
+                if (!continuesLine)
+                    AppendIndent(formatted, indentLevel);
+                formatted.Append(token.Source).Append('\n');
+                continuesLine = false;
                 index++;
                 continue;
             }
@@ -257,6 +261,61 @@ internal static class HtmlFormatter
         }
 
         return -1;
+    }
+
+    private static string CloseMissingEndTags(string html)
+    {
+        var tokens = Tokenize(html);
+        var openElements = new Stack<string>();
+        var sawMissingEndTag = false;
+        foreach (var token in tokens)
+        {
+            if (token.Kind == HtmlTokenKind.Start)
+                openElements.Push(token.Name);
+            else if (token.Kind == HtmlTokenKind.End)
+            {
+                if (openElements.Count == 0 || !openElements.Peek().Equals(token.Name, StringComparison.OrdinalIgnoreCase))
+                    sawMissingEndTag = true;
+                else
+                    openElements.Pop();
+            }
+        }
+
+        if (!sawMissingEndTag && openElements.Count == 0)
+            return html;
+
+        var repaired = new StringBuilder();
+        openElements.Clear();
+        foreach (var token in tokens)
+        {
+            if (token.Kind == HtmlTokenKind.Start)
+            {
+                openElements.Push(token.Name);
+                repaired.Append(token.Source);
+                continue;
+            }
+
+            if (token.Kind != HtmlTokenKind.End)
+            {
+                repaired.Append(token.Source);
+                continue;
+            }
+
+            while (openElements.Count > 0 && !openElements.Peek().Equals(token.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                repaired.Append("</").Append(openElements.Pop()).Append('>');
+            }
+
+            if (openElements.Count > 0)
+                openElements.Pop();
+
+            repaired.Append(token.Source);
+        }
+
+        while (openElements.Count > 0)
+            repaired.Append("</").Append(openElements.Pop()).Append('>');
+
+        return repaired.ToString();
     }
 
     private static bool IsFormattingWhitespace(string source) =>

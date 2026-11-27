@@ -118,7 +118,7 @@ var result = DocxToHtmlConverter.Convert("notes.docx", new DocxToHtmlOptions
 
 ### IncludeBaseCss
 
-When true (default), the stylesheet includes rules for body text, headings, tables, lists, notes, and text boxes. Set it false to emit only rules for styles and classes that appear.
+When true (default), the stylesheet includes rules for body text, headings, paragraphs, and links. Tables, lists, notes, text boxes, and their padding are included only when the document uses them. Spacing that matches the document default is not copied onto every style. Set it false to emit only rules for styles and classes that appear.
 
 ```csharp
 var result = DocxToHtmlConverter.Convert("notes.docx", new DocxToHtmlOptions
@@ -131,7 +131,7 @@ var result = DocxToHtmlConverter.Convert("notes.docx", new DocxToHtmlOptions
 
 - `None` drops direct run and paragraph formatting. Character styles are kept.
 - `SemanticOnly` emits `strong`, `em`, `u`, `s`, `sub`, and `sup`.
-- `SemanticAndClasses` (default) adds classes for colour, highlight, size, font, and direct paragraph layout.
+- `SemanticAndClasses` (default) adds classes for colour, highlight, size, and font. Direct spacing is a shared step such as `mt-12` or `ml-36`, not a separate class for every measurement.
 
 Table shading, cell alignment, column widths, and image sizes are classes in every mode. They are not inline styles.
 

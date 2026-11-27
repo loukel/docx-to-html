@@ -59,7 +59,7 @@ internal sealed class CssBuilder
     {
         var formatting = document.Styles.Paragraph(used.StyleId);
         var declarations = new StringBuilder();
-        AppendFormatting(declarations, formatting, includeRun: true);
+        AppendFormatting(declarations, formatting, includeRun: true, DocumentBaseline());
         if (declarations.Length == 0)
             return;
 
@@ -85,32 +85,34 @@ internal sealed class CssBuilder
         }
     }
 
-    internal static void AppendFormatting(StringBuilder builder, ParagraphFormattingPatch formatting, bool includeRun)
+    internal static void AppendFormatting(
+        StringBuilder builder,
+        ParagraphFormattingPatch formatting,
+        bool includeRun,
+        ParagraphFormattingPatch? baseline = null)
     {
         if (includeRun)
-            AppendRun(builder, formatting.Run);
+            AppendRun(builder, formatting.Run, baseline?.Run);
 
-        if (formatting.Alignment is string alignment)
+        if (formatting.Alignment is string alignment
+            && !alignment.Equals("left", StringComparison.OrdinalIgnoreCase)
+            && !SameText(alignment, baseline?.Alignment))
+        {
             builder.Append("  text-align: ").Append(alignment).Append(";\n");
+        }
 
-        if (formatting.SpacingBeforeTwips is int before)
-            builder.Append("  margin-top: ").Append(Points(before)).Append(";\n");
+        AppendBoxSide(builder, "margin-top", formatting.SpacingBeforeTwips, baseline?.SpacingBeforeTwips);
+        AppendBoxSide(builder, "margin-bottom", formatting.SpacingAfterTwips, baseline?.SpacingAfterTwips);
+        AppendBoxSide(builder, "margin-left", formatting.IndentLeftTwips, baseline?.IndentLeftTwips);
+        AppendBoxSide(builder, "margin-right", formatting.IndentRightTwips, baseline?.IndentRightTwips);
 
-        if (formatting.SpacingAfterTwips is int after)
-            builder.Append("  margin-bottom: ").Append(Points(after)).Append(";\n");
-
-        if (formatting.IndentLeftTwips is int left)
-            builder.Append("  margin-left: ").Append(Points(left)).Append(";\n");
-
-        if (formatting.IndentRightTwips is int right)
-            builder.Append("  margin-right: ").Append(Points(right)).Append(";\n");
-
-        if (formatting.FirstLineTwips is int firstLine)
+        if (formatting.FirstLineTwips is int firstLine && !SameTwips(firstLine, baseline?.FirstLineTwips))
             builder.Append("  text-indent: ").Append(Points(firstLine)).Append(";\n");
-        else if (formatting.HangingTwips is int hanging)
+        else if (formatting.HangingTwips is int hanging && !SameTwips(hanging, baseline?.HangingTwips))
             builder.Append("  text-indent: -").Append(Points(hanging)).Append(";\n");
 
-        if (formatting.LineValue is int line)
+        if (formatting.LineValue is int line
+            && (baseline?.LineValue != line || !SameText(formatting.LineRule, baseline?.LineRule)))
         {
             if (formatting.LineRule is "exact" or "atleast")
                 builder.Append("  line-height: ").Append(Points(line)).Append(";\n");
@@ -119,12 +121,38 @@ internal sealed class CssBuilder
         }
     }
 
-    private static void AppendRun(StringBuilder builder, RunFormattingPatch run)
+    private ParagraphFormattingPatch DocumentBaseline() => new()
     {
-        if (!string.IsNullOrEmpty(run.FontFamily))
+        SpacingBeforeTwips = document.ParagraphSpacingBeforeTwips,
+        SpacingAfterTwips = document.ParagraphSpacingAfterTwips,
+        LineValue = document.DefaultLineValue,
+        LineRule = document.DefaultLineRule,
+        Run = new RunFormattingPatch
+        {
+            FontFamily = document.BodyFontFamily,
+            FontSizeHalfPoints = document.BodyFontSizeHalfPoints
+        }
+    };
+
+    private static void AppendBoxSide(StringBuilder builder, string property, int? value, int? baseline)
+    {
+        if (value is not int twips || SameTwips(twips, baseline))
+            return;
+
+        builder.Append("  ").Append(property).Append(": ").Append(Points(twips)).Append(";\n");
+    }
+
+    private static bool SameTwips(int value, int? baseline) => value == (baseline ?? 0);
+
+    private static bool SameText(string? value, string? baseline) =>
+        string.Equals(value ?? "", baseline ?? "", StringComparison.OrdinalIgnoreCase);
+
+    private static void AppendRun(StringBuilder builder, RunFormattingPatch run, RunFormattingPatch? baseline)
+    {
+        if (!string.IsNullOrEmpty(run.FontFamily) && !SameText(run.FontFamily, baseline?.FontFamily))
             builder.Append("  font-family: ").Append(QuoteFont(run.FontFamily)).Append(";\n");
 
-        if (run.FontSizeHalfPoints is int halfPoints)
+        if (run.FontSizeHalfPoints is int halfPoints && halfPoints != baseline?.FontSizeHalfPoints)
             builder.Append("  font-size: ").Append(CssNumbers.Points(UnitConverter.HalfPointsToPoints(halfPoints))).Append("pt;\n");
 
         if (run.Bold == true)
@@ -178,15 +206,6 @@ internal sealed class CssBuilder
                 : CssNumbers.Decimal(line / (double)UnitConverter.LineUnitPerSingleSpacing);
         }
 
-        var pageBreak = MarkupSafety.ClassToken(prefix + "page-break");
-        var tab = MarkupSafety.ClassToken(prefix + "tab");
-        var textbox = MarkupSafety.ClassToken(prefix + "textbox");
-        var footnotes = MarkupSafety.ClassToken(prefix + "footnotes");
-        var endnotes = MarkupSafety.ClassToken(prefix + "endnotes");
-        var footnoteReference = MarkupSafety.ClassToken(prefix + "footnote-ref");
-        var header = MarkupSafety.ClassToken(prefix + "doc-header");
-        var footer = MarkupSafety.ClassToken(prefix + "doc-footer");
-        var comment = MarkupSafety.ClassToken(prefix + "comment");
         var firstRow = MarkupSafety.ClassToken(prefix + "t-first-row");
         var banded = MarkupSafety.ClassToken(prefix + "t-banded");
 
@@ -205,46 +224,84 @@ internal sealed class CssBuilder
         builder.Append("p {\n");
         builder.Append("  margin: ").Append(before).Append(" 0 ").Append(after).Append(";\n");
         builder.Append("}\n");
-        builder.Append("table {\n");
-        builder.Append("  border-collapse: collapse;\n");
-        builder.Append("  width: 100%;\n");
-        builder.Append("  margin: 0 0 1em;\n");
+        builder.Append("ul, ol {\n");
+        builder.Append("  margin: 0 0 ").Append(after).Append(";\n");
+        builder.Append("  padding-left: 1.5em;\n");
         builder.Append("}\n");
-        builder.Append("td, th {\n");
-        builder.Append("  border: 1px solid #bbbbbb;\n");
-        builder.Append("  padding: 4pt 6pt;\n");
-        builder.Append("  vertical-align: top;\n");
-        builder.Append("}\n");
-        builder.Append("th {\n");
-        builder.Append("  font-weight: bold;\n");
-        builder.Append("  text-align: left;\n");
-        builder.Append("}\n");
-        builder.Append('.').Append(pageBreak).Append(" {\n  border: 0;\n  border-top: 1px solid #cccccc;\n  margin: 1.5em 0;\n}\n");
-        builder.Append('.').Append(tab).Append(" {\n  display: inline-block;\n  width: 2em;\n}\n");
-        builder.Append('.').Append(textbox).Append(" {\n  border: 1px solid #cccccc;\n  padding: 0.5em 0.75em;\n  margin: 0.5em 0;\n}\n");
-        builder.Append('.').Append(footnotes).Append(", .").Append(endnotes).Append(" {\n  margin-top: 2em;\n  border-top: 1px solid #cccccc;\n  font-size: 0.92em;\n}\n");
-        builder.Append('.').Append(footnotes).Append(" ol, .").Append(endnotes).Append(" ol {\n  padding-left: 1.5em;\n}\n");
-        builder.Append('.').Append(footnoteReference).Append(" {\n  text-decoration: none;\n}\n");
-        builder.Append('.').Append(header).Append(", .").Append(footer).Append(" {\n  color: #444444;\n}\n");
-        builder.Append('.').Append(header).Append(" {\n  margin-bottom: 1.5em;\n}\n");
-        builder.Append('.').Append(footer).Append(" {\n  margin-top: 1.5em;\n}\n");
-        builder.Append('.').Append(comment).Append(" {\n  color: #666666;\n  font-size: 0.9em;\n}\n");
-        AppendListStyle(builder, prefix, "lower-alpha");
-        AppendListStyle(builder, prefix, "upper-alpha");
-        AppendListStyle(builder, prefix, "lower-roman");
-        AppendListStyle(builder, prefix, "upper-roman");
-        AppendListStyle(builder, prefix, "decimal-leading-zero");
-        builder.Append("table.").Append(firstRow).Append(" thead th {\n  background: #f3f6fb;\n}\n");
-        builder.Append("table.").Append(banded).Append(" tbody tr:nth-child(even) {\n  background: #f7f7f7;\n}\n");
+        if (Tables().Any())
+        {
+            builder.Append("table {\n");
+            builder.Append("  border-collapse: collapse;\n");
+            builder.Append("  width: 100%;\n");
+            builder.Append("  margin: 0 0 1em;\n");
+            builder.Append("}\n");
+            builder.Append("td, th {\n");
+            builder.Append("  border: 1px solid #bbbbbb;\n");
+            builder.Append("  padding: 4pt 6pt;\n");
+            builder.Append("  vertical-align: top;\n");
+            builder.Append("}\n");
+            builder.Append("th {\n");
+            builder.Append("  font-weight: bold;\n");
+            builder.Append("  text-align: left;\n");
+            builder.Append("}\n");
+            if (Tables().Any(table => table.FirstRowLook))
+                builder.Append("table.").Append(firstRow).Append(" thead th {\n  background: #f3f6fb;\n}\n");
+            if (Tables().Any(table => table.BandedRows))
+                builder.Append("table.").Append(banded).Append(" tbody tr:nth-child(even) {\n  background: #f7f7f7;\n}\n");
+        }
+
         builder.Append("img {\n  max-width: 100%;\n  height: auto;\n}\n");
         builder.Append("a {\n  color: #0563c1;\n}\n");
         return builder.ToString();
     }
 
-    private static void AppendListStyle(StringBuilder builder, string prefix, string format)
+    private IEnumerable<TableBlock> Tables()
     {
-        var className = MarkupSafety.ClassToken(prefix + format);
-        builder.Append("ol.").Append(className).Append(" {\n  list-style-type: ").Append(format).Append(";\n}\n");
+        foreach (var block in EnumerateBlocks(document.BodyBlocks))
+        {
+            if (block is TableBlock table)
+                yield return table;
+        }
+
+        foreach (var block in EnumerateBlocks(document.HeaderBlocks))
+        {
+            if (block is TableBlock table)
+                yield return table;
+        }
+
+        foreach (var block in EnumerateBlocks(document.FooterBlocks))
+        {
+            if (block is TableBlock table)
+                yield return table;
+        }
+
+        foreach (var note in document.Notes)
+        {
+            foreach (var block in EnumerateBlocks(note.Blocks))
+            {
+                if (block is TableBlock table)
+                    yield return table;
+            }
+        }
+    }
+
+    private static IEnumerable<Block> EnumerateBlocks(IEnumerable<Block> blocks)
+    {
+        foreach (var block in blocks)
+        {
+            yield return block;
+            IEnumerable<Block> nested = block switch
+            {
+                TableBlock table => table.Rows.SelectMany(row => row.Cells).SelectMany(cell => cell.Blocks),
+                TextBoxBlock textBox => textBox.Blocks,
+                ListBlock list => list.Items.SelectMany(item => item.NestedLists),
+                ParagraphBlock paragraph => paragraph.Inlines.OfType<TextBoxInline>().SelectMany(textBox => textBox.Blocks),
+                _ => Array.Empty<Block>()
+            };
+
+            foreach (var child in EnumerateBlocks(nested))
+                yield return child;
+        }
     }
 
     private static string Points(int twips) =>

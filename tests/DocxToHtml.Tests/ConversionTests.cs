@@ -115,6 +115,67 @@ public class ConversionTests
         Assert.Single(Regex.Matches(result.Html, "<strong>"));
     }
 
+    [Theory]
+    [MemberData(nameof(AllFixtures))]
+    public void HtmlHasAClosingTagForEveryElement(string fixtureName)
+    {
+        var result = ConvertBytes(WordFixtureFactory.Build(fixtureName));
+        var openElements = new Stack<string>();
+        foreach (System.Text.RegularExpressions.Match match in Regex.Matches(result.Html, @"</?([A-Za-z][A-Za-z0-9]*)\b[^>]*>"))
+        {
+            var tag = match.Groups[1].Value.ToLowerInvariant();
+            var source = match.Value;
+            if (source.StartsWith("</", StringComparison.Ordinal))
+            {
+                Assert.True(openElements.Count > 0 && openElements.Peek() == tag, $"Unexpected </{tag}> in {fixtureName}.");
+                openElements.Pop();
+                continue;
+            }
+
+            if (source.EndsWith("/>", StringComparison.Ordinal) || VoidTags.Contains(tag))
+                continue;
+
+            openElements.Push(tag);
+        }
+
+        Assert.Empty(openElements);
+    }
+
+    private static readonly HashSet<string> VoidTags = new(StringComparer.Ordinal)
+    {
+        "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"
+    };
+
+    [Fact]
+    public void StylesheetOmitsUnusedPaddingAndSpacingClasses()
+    {
+        var headings = ConvertBytes(WordFixtureFactory.Build("headings"));
+        Assert.DoesNotContain(".textbox", headings.Css, StringComparison.Ordinal);
+        Assert.DoesNotContain(".footnotes", headings.Css, StringComparison.Ordinal);
+        Assert.DoesNotContain(".page-break", headings.Css, StringComparison.Ordinal);
+        Assert.DoesNotContain("ol.upper-roman", headings.Css, StringComparison.Ordinal);
+        Assert.DoesNotContain("padding: 4pt 6pt", headings.Css, StringComparison.Ordinal);
+        Assert.Contains("ul, ol {\n  margin: 0 0 8pt;\n  padding-left: 1.5em;\n}", headings.Css, StringComparison.Ordinal);
+
+        var lists = ConvertBytes(WordFixtureFactory.Build("lists"));
+        Assert.Contains(".lower-alpha {\n  list-style-type: lower-alpha;\n}", lists.Css, StringComparison.Ordinal);
+        Assert.DoesNotContain(".upper-roman", lists.Css, StringComparison.Ordinal);
+        Assert.Single(Regex.Matches(lists.Css, "padding-left:"));
+
+        var builder = new WordDocumentBuilder("Spacing");
+        builder.Add(new Paragraph(
+            new ParagraphProperties(new SpacingBetweenLines { Before = "200" }),
+            new Run(new Text("Ten"))));
+        builder.Add(new Paragraph(
+            new ParagraphProperties(new SpacingBetweenLines { Before = "240", After = "120" }, new Indentation { Left = "720" }),
+            new Run(new Text("Twelve"))));
+        var spacing = ConvertBytes(builder.Finish());
+        Assert.Contains("class=\"mt-12\"", spacing.Html, StringComparison.Ordinal);
+        Assert.Contains("class=\"mt-12-mb-8-ml-36\"", spacing.Html, StringComparison.Ordinal);
+        Assert.DoesNotContain("before-", spacing.Css, StringComparison.Ordinal);
+        Assert.Single(Regex.Matches(spacing.Css, @"\.mt-12 \{"));
+    }
+
     [Fact]
     public void HtmlWrittenToTheFileIsIndented()
     {
